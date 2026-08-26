@@ -21,7 +21,7 @@ asciinema:
             # "record"`. (box/<distro> adopts the matching @github pin via reconcile later — the
             # deliberate cross-repo lag; the R10 bed loads the LOCAL candy via the superproject
             # override.)
-            - plugin-record
+            - '@github.com/opencharly/plugin-record/candy/plugin-record:v2026.237.1427'
         package:
             - asciinema
         plan:
