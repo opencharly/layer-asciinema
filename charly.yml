@@ -3,14 +3,23 @@ asciinema:
     candy:
         version: 2026.144.1443
         description: |
-            Record and replay terminal sessions as asciicast v2 .cast files
+            Record and replay terminal sessions as asciicast v2 .cast files, and
+            render them to animated GIFs with agg
             The asciinema candy installs the asciinema terminal recorder from the
             distro package (named `asciinema` on RPM, DEB, and PAC alike). It
             provides the /usr/bin/asciinema CLI whose `rec` subcommand captures a
             terminal session -- timing, input, and output -- into a replayable
             asciicast v2 .cast file; this is the engine behind the `record:` check
             verb's terminal mode (`record: start` with `record_mode: terminal`,
-            served out-of-process by candy/plugin-record).
+            served out-of-process by candy/plugin-record). It also installs the
+            agg gif generator (asciinema/agg, pinned v1.9.0) as a prebuilt binary
+            at /usr/local/bin/agg plus a monospace font (DejaVu Sans Mono) so a
+            stopped .cast recording can be rendered to an animated GIF -- the
+            engine behind the `record: gif` method. agg is NOT a distro package
+            (absent from RPM/DEB/PAC repos), so the candy downloads the pinned
+            prebuilt release binary; the font IS a distro package, resolved
+            per-distro via package_map (dejavu-sans-mono-fonts / ttf-dejavu /
+            fonts-dejavu-core).
         require:
             # plugin-record is the OUT-OF-TREE plugin that serves the `record:` check verb
             # (the asciinema/wf-recorder/pixelflux recording driver lives there, not in
@@ -24,7 +33,29 @@ asciinema:
             - '@github.com/opencharly/plugin-record/candy/plugin-record:v2026.237.1427'
         package:
             - asciinema
+        distro:
+            arch:
+                package:
+                    - ttf-dejavu
+            debian,ubuntu:
+                package:
+                    - fonts-dejavu-core
+            fedora:
+                package:
+                    - dejavu-sans-mono-fonts
+        var:
+            AGG_VERSION: v1.9.0
         plan:
+            - run: download the agg gif generator binary and install it to /usr/local/bin
+              download: "https://github.com/asciinema/agg/releases/download/${AGG_VERSION}/agg-${BUILD_ARCH}-unknown-linux-gnu"
+              to: /usr/local/bin/agg
+              mode: "0755"
+              run_as: root
+              # Explicit uninstall list so `charly fleet del` removes just the
+              # binary this download drops in /usr/local/bin, not the whole shared
+              # dir (which would wipe every system-local binary).
+              uninstall:
+                - /usr/local/bin/agg
             - check: the asciinema recorder binary is installed at /usr/bin/asciinema
               file:
                 file: /usr/bin/asciinema
@@ -43,6 +74,19 @@ asciinema:
               stdout:
                 - contains: rec
               command: /usr/bin/asciinema --help
+            - check: the agg gif generator binary is installed at /usr/local/bin/agg
+              file:
+                file: /usr/local/bin/agg
+                exists: true
+            - check: agg reports its version and exits cleanly
+              exit_status: 0
+              stdout:
+                - contains: agg
+              command: /usr/local/bin/agg --version
+            - check: agg converts a minimal asciicast to a gif (proving the binary and the monospace font work)
+              exit_status: 0
+              command: |
+                printf '{"version": 2, "width": 20, "height": 5, "timestamp": 0}\n[0.0, "o", "hello\\n"]\n' > /tmp/charly-agg-check.cast && /usr/local/bin/agg /tmp/charly-agg-check.cast /tmp/charly-agg-check.gif && test -s /tmp/charly-agg-check.gif
 
 asciinema-skill:
     skill:
@@ -59,16 +103,16 @@ asciinema-skill:
             
             | Property | Value |
             |----------|-------|
-            | Install files | `charly.yml` (packages only) |
+            | Install files | `charly.yml` (packages + one binary download) |
             | Depends | none |
             
             ## Packages
             
-            RPM: `asciinema`
+            RPM: `asciinema` + `dejavu-sans-mono-fonts` · PAC: `asciinema` + `ttf-dejavu` · DEB: `asciinema` + `fonts-dejavu-core`
             
             ## What It Does
             
-            Records terminal sessions as `.cast` files (asciicast v2 format). Recordings capture timing, input, and output — can be replayed with `asciinema play`, uploaded to asciinema.org, or converted to GIF/video.
+            Records terminal sessions as `.cast` files (asciicast v2 format). Recordings capture timing, input, and output — can be replayed with `asciinema play`, uploaded to asciinema.org, or converted to GIF/video. Also installs the `agg` gif generator (asciinema/agg, pinned v1.9.0, prebuilt binary at /usr/local/bin/agg) plus a DejaVu Sans Mono font so a stopped recording can be rendered to an animated GIF — the engine behind the `record: gif` method.
             
             ## Cross-distro coverage
             
@@ -119,6 +163,30 @@ asciinema-skill:
             asciinema play demo.cast                     # play back the copied-out artifact
             ```
             
+            ## Converting a recording to an animated GIF
+            
+            The `record: gif` method (served by the same plugin) renders a stopped
+            terminal recording to an animated GIF with agg — the binary this candy
+            installs. It runs agg in the container and copies the .gif to the host
+            artifact path:
+            
+            ```yaml
+            plan:
+                - check: the recording is rendered to an animated gif
+                  record:
+                      method: gif
+                      record_name: demo
+                      artifact: demo.gif
+                      theme: monokai
+                      speed: 2
+                      idle_time_limit: 1
+                  context: [deploy]
+            ```
+            
+            agg options (theme, font_size, speed, idle_time_limit, fps_cap, select,
+            cols, rows, no_loop, last_frame_duration, renderer) map 1:1 to agg's CLI
+            flags; the recording's embedded theme is used when `theme:` is unset.
+            
             ## Note
             
             Also available via the `dev-tools` candy (which includes asciinema among many other tools). This standalone candy is for boxes that need terminal recording without the full dev-tools bundle.
@@ -131,17 +199,18 @@ asciinema-skill:
             
             ## Related Commands
             
-            - `/charly-check:record` — Terminal recording via asciinema (start, stop, cmd)
+            - `/charly-check:record` — Terminal recording via asciinema (start, stop, cmd, gif)
             
             ## Cross-References
             
-            - `/charly-check:record` — the `record:` check verb (`record_mode: terminal`) uses asciinema
+            - `/charly-check:record` — the `record:` check verb (`record_mode: terminal` records, `record: gif` renders) uses asciinema + agg
             - `/charly-coder:dev-tools` — Also includes asciinema (larger candy)
             
             ## When to Use This Skill
             
             Use when the user asks about:
             - Terminal session recording
+            - Converting a terminal recording to an animated GIF
             - asciinema in containers
             - The `asciinema` candy
             
