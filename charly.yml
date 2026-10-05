@@ -49,7 +49,7 @@ asciinema:
               to: /usr/local/bin/agg
               mode: "0755"
               run_as: root
-              # Explicit uninstall list so `charly fleet del` removes just the
+              # Explicit uninstall list so `charly deploy del` removes just the
               # binary this download drops in /usr/local/bin, not the whole shared
               # dir (which would wipe every system-local binary).
               uninstall:
