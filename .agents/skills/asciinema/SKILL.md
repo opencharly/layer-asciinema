@@ -101,9 +101,6 @@ Also available via the `dev-tools` candy (which includes asciinema among many ot
 
 ## Used In Boxes
 
-- `/charly-selkies:sway-browser-vnc` (via `sway-desktop` metalayer)
-- `/charly-selkies:selkies-labwc` (via `selkies-desktop` metalayer)
-- `/charly-selkies:selkies-labwc-nvidia` (via `selkies-desktop` metalayer)
 
 ## Related Commands
 
